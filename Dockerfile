@@ -6,6 +6,7 @@ WORKDIR /app
 COPY app/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
+# Gunicorn must start as the application user.
 USER app
 EXPOSE 5000
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--access-logfile", "-", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--access-logfile", "-", "app.app:app"]
