@@ -113,3 +113,34 @@ jobs:
             docker push --platform linux/amd64 "${IMAGE_NAME}:${tag}" | tee "push-${tag}.log"
             grep -E 'digest: sha256:' "push-${tag}.log"
           done
+
+  deploy:
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, devops-vm]
+    permissions:
+      contents: read
+    concurrency:
+      group: deploy-devops-vm
+      cancel-in-progress: false
+    steps:
+      - name: Deploy the published SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${DEVOPS_ANSIBLE_ROOT:-}" || {
+            echo "::error::Set DEVOPS_ANSIBLE_ROOT on the deployment runner"
+            exit 1
+          }
+          cd "$DEVOPS_ANSIBLE_ROOT"
+          ansible-playbook site.yml --extra-vars "app_tag=$GITHUB_SHA"
+      - name: Check the application
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${DEVOPS_HEALTH_URL:-}" || {
+            echo "::error::Set DEVOPS_HEALTH_URL on the deployment runner"
+            exit 1
+          }
+          curl --fail --silent --show-error --max-time 10 "$DEVOPS_HEALTH_URL" |
+            python3 -c 'import json,sys; data=json.load(sys.stdin); assert data=={"status":"ok"}, data; print(json.dumps(data))'
